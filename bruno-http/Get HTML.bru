@@ -1,0 +1,23 @@
+meta {
+  name: Get HTML
+  type: http
+  seq: 1
+}
+
+get {
+  url: https://www.vagalume.com.br/search?q=estopa+cacho+a+cacho
+  body: none
+  auth: inherit
+}
+
+params:query {
+  q: estopa+cacho+a+cacho
+}
+
+headers {
+  Content-Type: text/html; charset=utf-8
+}
+
+settings {
+  encodeUrl: true
+}
