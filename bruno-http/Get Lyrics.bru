@@ -1,17 +1,17 @@
 meta {
-  name: Get HTML
+  name: Get Lyrics
   type: http
-  seq: 1
+  seq: 3
 }
 
 get {
-  url: https://www.vagalume.com.br/search?q=estopa+cacho+a+cacho
+  url: http://localhost:3077/v1/lyrics?query=estopa cacho a cacho
   body: none
   auth: inherit
 }
 
 params:query {
-  q: estopa+cacho+a+cacho
+  query: estopa cacho a cacho
 }
 
 headers {
