@@ -2,7 +2,7 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/sergiusdevs/spotycraw/src/api/controller"
+	"github.com/tutitoos/lyricscrawl/src/api/controller"
 )
 
 func NewRouter() *gin.Engine {

@@ -5,9 +5,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sergiusdevs/spotycraw/src/cache"
-	"github.com/sergiusdevs/spotycraw/src/logger"
-	"github.com/sergiusdevs/spotycraw/src/scraper"
+	"github.com/tutitoos/lyricscrawl/src/cache"
+	"github.com/tutitoos/lyricscrawl/src/logger"
+	"github.com/tutitoos/lyricscrawl/src/scraper"
 )
 
 type LyricsController struct {

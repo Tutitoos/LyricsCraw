@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"github.com/sergiusdevs/spotycraw/src/api/router"
-	"github.com/sergiusdevs/spotycraw/src/cache"
-	"github.com/sergiusdevs/spotycraw/src/logger"
+	"github.com/tutitoos/lyricscrawl/src/api/router"
+	"github.com/tutitoos/lyricscrawl/src/cache"
+	"github.com/tutitoos/lyricscrawl/src/logger"
 )
 
 func main() {

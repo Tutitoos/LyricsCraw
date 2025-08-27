@@ -1,4 +1,4 @@
-module github.com/sergiusdevs/spotycraw
+module github.com/tutitoos/lyricscrawl
 
 go 1.24.4
 

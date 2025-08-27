@@ -1,4 +1,4 @@
-# LyricsCraw (SpotyCraw)
+# LyricsCrawl
 
 API REST en Go para obtener letras de canciones mediante scraping de Vagalume usando Chrome (chromedp). Incluye cache en memoria con TTL para reducir latencia en consultas repetidas.
 
