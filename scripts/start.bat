@@ -1,5 +1,5 @@
 @echo off
-REM Windows start script for SpotyCraw
+REM Windows start script for LyricsCraw
 set APP_ENV=production
 
 if "%APP_ENV%"=="development" (

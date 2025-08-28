@@ -33,8 +33,7 @@ func InitLogger() {
 	if err != nil {
 		panic(err)
 	}
-	defer Logger.Sync()
 
 	Sugar = Logger.Sugar()
-	Sugar.Info("✅ Logger inicializado")
+	Sugar.Info("✅ Logger initialized")
 }

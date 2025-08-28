@@ -1,12 +1,12 @@
 @echo off
-REM Windows build script for SpotyCraw
+REM Windows build script for LyricsCraw
 
 if "%1"=="linux" (
     echo Building for Linux...
     set GOOS=linux
     set CGO_ENABLED=0
     if not exist bin mkdir bin
-    REM Solo funcionará si tienes cross-compiling configurado en Go para Windows
+    REM This only works if you have cross-compiling configured in Go on Windows
     call go build -ldflags="-w -s" -a -installsuffix cgo -o bin\app src/main.go
 ) else (
     echo Building for current OS...

@@ -14,7 +14,7 @@ import (
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Printf("⚠️  No se pudo cargar el archivo .env: %v", err)
+		log.Printf("⚠️  Could not load .env file: %v", err)
 	}
 
 	logger.InitLogger()
@@ -30,20 +30,20 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	default:
 		gin.SetMode(gin.DebugMode)
-		logger.Sugar.Warnf("⚠️  Modo de entorno desconocido: %s, usando modo de desarrollo por defecto", env)
+		logger.Sugar.Warnf("⚠️  Unknown APP_ENV: %s, using development mode by default", env)
 	}
 
-	// Inicializar el router
+	// Initialize router
 	r := router.NewRouter()
 
 	port := os.Getenv("APP_PORT")
 	if port == "" {
 		port = "8080"
-		logger.Sugar.Warn("⚠️  APP_PORT no está definido, usando puerto por defecto :8080")
+		logger.Sugar.Warn("⚠️  APP_PORT is not set, using default :8080")
 	}
 
-	logger.Sugar.Infof("🚀 Iniciando servidor en %s (env: %s)", port, env)
+	logger.Sugar.Infof("🚀 Starting server on %s (env: %s)", port, env)
 	if err := r.Run(fmt.Sprintf(":%s", port)); err != nil {
-		logger.Sugar.Fatalf("❌ Error al iniciar el servidor: %v", err)
+		logger.Sugar.Fatalf("❌ Failed to start server: %v", err)
 	}
 }

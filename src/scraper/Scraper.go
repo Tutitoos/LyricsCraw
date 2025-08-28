@@ -14,7 +14,7 @@ func ScrapeVagalume(query string) (string, error) {
 	ctx, cancel := chromedp.NewContext(context.Background())
 	defer cancel()
 
-	// Codificar la query para evitar problemas con caracteres especiales
+	// Encode query to avoid issues with special characters
 	encodedQuery := url.QueryEscape(query)
 	fmt.Println("Step 1: Encoding query and initializing context")
 

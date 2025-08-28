@@ -1,47 +1,47 @@
 # LyricsCrawl
 
-API REST en Go para obtener letras de canciones mediante scraping de Vagalume usando Chrome (chromedp). Incluye cache en memoria con TTL para reducir latencia en consultas repetidas.
+REST API in Go to fetch song lyrics by scraping Vagalume using Chrome (chromedp). Includes an in-memory cache with TTL to reduce latency on repeated queries.
 
-## Características
+## Features
 
-- Gin HTTP server con endpoints `/health` y `/v1/lyrics`.
-- Scraping con `chromedp` (Chrome en modo visible por defecto).
-- Cache en memoria con TTL y limpiador en background.
-- Logging estructurado con Uber Zap.
+- Gin HTTP server with endpoints `/health` and `/v1/lyrics`.
+- Scraping with `chromedp` (Chrome runs headless by default).
+- In-memory cache with TTL and a background janitor.
+- Structured logging with Uber Zap.
 
-## Requisitos
+## Requirements
 
-- Go (el módulo declara `go 1.24.4`).
-- Google Chrome o Chromium instalado en el sistema (chromedp lo usa bajo el capó).
-- macOS, Linux o Windows.
+- Go (the module declares `go 1.24.4`).
+- Google Chrome or Chromium installed on the system (chromedp uses it under the hood).
+- macOS, Linux, or Windows.
 
-## Variables de entorno
+## Environment variables
 
-- `APP_ENV`: `development` o `production`. Afecta logs y modo Gin. Por defecto: `development`.
-- `APP_PORT`: puerto del servidor. Por defecto: `8080`.
-- `APP_LYRICS_CACHE_TTL_SECONDS`: TTL del cache en segundos. Por defecto: `1800` (30 min).
-- `APP_LYRICS_CACHE_MAX_ENTRIES`: capacidad máxima del cache. Por defecto: `1000`.
+- `APP_ENV`: `development` or `production`. Affects logs and Gin mode. Default: `development`.
+- `APP_PORT`: server port. Default: `8080`.
+- `APP_LYRICS_CACHE_TTL_SECONDS`: cache TTL in seconds. Default: `1800` (30 min).
+- `APP_LYRICS_CACHE_MAX_ENTRIES`: maximum cache capacity. Default: `1000`.
 
-Puedes definirlas en un `.env` en la raíz; si existe, se carga al iniciar.
+You can define them in a `.env` at the repository root; if present, it is loaded on startup.
 
-## Instalar y ejecutar
+## Install and run
 
-Clona el repositorio y descarga dependencias.
+Clone the repository and fetch dependencies.
 
-Desarrollo (con recarga manual):
+Development (manual reload):
 
 ```bash
 make dev
 ```
 
-Producción (binario en `./bin/app`):
+Production (binary in `./bin/app`):
 
 ```bash
 make build
 make start
 ```
 
-Alternativa sin Makefile:
+Alternative without Makefile:
 
 ```bash
 # development
@@ -60,68 +60,68 @@ Health check:
 GET /health -> 200 { "status": "ok" }
 ```
 
-Obtener letras:
+Get lyrics:
 
 ```http
-GET /v1/lyrics?query=<artista> - <cancion>
+GET /v1/lyrics?query=<artist> - <song>
 ```
 
-Ejemplo curl:
+curl example:
 
 ```bash
 curl "http://localhost:8080/v1/lyrics?query=Coldplay%20-%20Yellow"
 ```
 
-Respuesta:
+Response:
 
 ```json
 {
-	"data": "<letra>",
+	"data": "<lyrics>",
 	"cached": true
 }
 ```
 
-La clave del cache es la `query` normalizada (minúsculas, trim). Si hay hit en cache, `cached` es `true` y la respuesta es inmediata; de lo contrario se realiza scraping y se guarda.
+The cache key is the normalized `query` (lowercased, trimmed). If there is a cache hit, `cached` is `true` and the response is immediate; otherwise scraping runs and the result is stored.
 
-## Cómo funciona el scraping (resumen)
+## How scraping works (summary)
 
-1) Abre un contexto de Chrome (`headless=false` por defecto) con un User-Agent aleatorio.
-2) Navega a `https://www.vagalume.com.br/search?q=<query>` y obtiene el primer resultado.
-3) Ajusta la URL (elimina `-traducao` si aplica) y navega al detalle.
-4) Si hay aviso +18, intenta aceptar el modal.
-5) Extrae el texto de `div#lyrics` y limpia mensajes de confirmación.
+1) Opens a Chrome context (`headless=true` by default) with a random User-Agent.
+2) Navigates to `https://www.vagalume.com.br/search?q=<query>` and takes the first result.
+3) Adjusts the URL (removes `-traducao` if applicable) and navigates to the detail page.
+4) If an 18+ notice appears, it tries to accept the modal.
+5) Extracts the text from `div#lyrics` and removes confirmation messages.
 
-Código relevante:
+Relevant code:
 - `src/scraper/Scraper.go`
 - `src/scraper/UserAgentGenerator.go`
 
-## Notas sobre Chrome
+## Notes about Chrome
 
-- Actualmente cada solicitud crea un contexto nuevo de Chrome y se cierra al terminar. Esto es seguro y simple.
-- Si necesitas mantener Chrome abierto persistentemente para varias solicitudes, considera crear un contexto global reutilizable y controlar su ciclo de vida. (No implementado por defecto.)
+- Each request currently creates a fresh Chrome context and closes it afterwards. This is safe and simple.
+- If you need to keep Chrome open persistently across requests, consider creating a reusable global context and managing its lifecycle. (Not implemented by default.)
 
-## Cache en memoria
+## In-memory cache
 
-- Implementación en `src/cache/LyricsCache.go`.
-- Inicialización automática en `main` leyendo variables de entorno.
-- Limpieza periódica en background (~TTL/2, mínimo 30s).
+- Implementation in `src/cache/LyricsCache.go`.
+- Automatically initialized in `main` by reading environment variables.
+- Periodic background cleanup (~TTL/2, minimum 30s).
 
-## Estructura del proyecto
+## Project structure
 
-- `src/main.go`: arranque del servidor, carga `.env`, logger y router.
-- `src/api/router/Router.go`: rutas y grupos.
-- `src/api/controller/TokenController.go`: controlador de letras.
-- `src/scraper/*`: scraping y user-agent.
-- `src/logger/logger.go`: configuración de Zap.
-- `scripts/*`: helpers para dev/build/start.
-- `bruno-http/*`: colección Bruno opcional para probar.
+- `src/main.go`: server bootstrap, loads `.env`, logger, and router.
+- `src/api/router/Router.go`: routes and groups.
+- `src/api/controller/TokenController.go`: lyrics controller.
+- `src/scraper/*`: scraping and user-agent.
+- `src/logger/logger.go`: Zap configuration.
+- `scripts/*`: helpers for dev/build/start.
+- `bruno-http/*`: optional Bruno collection for testing.
 
-## Problemas comunes y solución
+## Common issues and fixes
 
-- Chrome no encontrado o arranque lento: instala Google Chrome estable y mantenlo actualizado. En contenedores, habilita flags como `--no-sandbox` (ya configurado en el código) según sea necesario.
-- Permisos en macOS: si aparece diálogo de seguridad al lanzar Chrome, autoriza la app.
-- Selectores rotos: los selectores de Vagalume pueden cambiar. Revisa `a.gs-title`, `div#lyrics` y el modal +18 si deja de funcionar.
+- Chrome not found or slow to start: install stable Google Chrome and keep it updated. In containers, enable flags like `--no-sandbox` (already set in code) as needed.
+- Permissions on macOS: if a security dialog appears when launching Chrome, allow the app.
+- Broken selectors: Vagalume selectors may change. Check `a.gs-title`, `div#lyrics`, and the 18+ modal if things stop working.
 
-## Licencia
+## License
 
-No especificada.
+Not specified.

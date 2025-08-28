@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Si se pasa 'linux' como argumento, compila para Linux, si no, para el sistema actual
+# If 'linux' is passed as an argument, build for Linux; otherwise, build for the current OS
 if [ "$1" = "linux" ]; then
   echo "Building for Linux..."
   export GOOS=linux

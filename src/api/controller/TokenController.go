@@ -32,8 +32,8 @@ func (tc *LyricsController) GetLyrics(c *gin.Context) {
 
 	lyrics, err := scraper.ScrapeVagalume(query)
 	if err != nil {
-		fmt.Println("Failed to get token:", err)
-		logger.Sugar.Info("Failed to get token", "error", err)
+		fmt.Println("Failed to fetch lyrics:", err)
+		logger.Sugar.Infow("Failed to fetch lyrics", "error", err, "query", query)
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": err.Error(),
 		})
