@@ -31,3 +31,6 @@ ecosystem.*
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Bruno HTTP
+bruno-http/environments/Prod*
