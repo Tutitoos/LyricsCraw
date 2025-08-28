@@ -19,8 +19,10 @@ func main() {
 
 	logger.InitLogger()
 
-	// Init in-memory lyrics cache
-	cache.InitFromEnv()
+	// Initialize DB-backed cache (required). Fail fast if it cannot be initialized.
+	if err := cache.InitLyricsDBFromEnv(); err != nil {
+		logger.Sugar.Fatalf("❌ Failed to initialize DB cache: %v", err)
+	}
 
 	env := os.Getenv("APP_ENV")
 	switch env {
@@ -41,6 +43,9 @@ func main() {
 		port = "8080"
 		logger.Sugar.Warn("⚠️  APP_PORT is not set, using default :8080")
 	}
+
+	// ensure cache is closed on shutdown
+	defer cache.CloseCache()
 
 	logger.Sugar.Infof("🚀 Starting server on %s (env: %s)", port, env)
 	if err := r.Run(fmt.Sprintf(":%s", port)); err != nil {

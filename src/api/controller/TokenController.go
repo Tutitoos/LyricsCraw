@@ -25,8 +25,8 @@ func (tc *LyricsController) GetLyrics(c *gin.Context) {
 	}
 
 	// Try cache first
-	if v, ok := cache.Default.Get(query); ok {
-		c.JSON(http.StatusOK, gin.H{"data": v, "cached": true})
+	if cached, ok := cache.Get(query); ok {
+		c.JSON(http.StatusOK, gin.H{"data": cached, "cached": true})
 		return
 	}
 
@@ -41,7 +41,7 @@ func (tc *LyricsController) GetLyrics(c *gin.Context) {
 	}
 
 	// Store in cache
-	cache.Default.Set(query, lyrics)
+	cache.Set(query, lyrics)
 
 	c.JSON(http.StatusOK, gin.H{"data": lyrics, "cached": false})
 }
