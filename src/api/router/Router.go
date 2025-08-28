@@ -19,6 +19,7 @@ func NewRouter() *gin.Engine {
 	v1 := router.Group("/v1")
 	{
 		v1.GET("/lyrics", lyricsController.GetLyrics)
+		v1.GET("/lyrics/all", lyricsController.GetAllLyrics)
 	}
 
 	return router

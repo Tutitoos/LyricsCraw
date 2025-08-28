@@ -45,3 +45,13 @@ func (tc *LyricsController) GetLyrics(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": lyrics, "cached": false})
 }
+
+// GetAllLyrics returns all cached lyrics entries.
+func (tc *LyricsController) GetAllLyrics(c *gin.Context) {
+	entries, err := cache.GetAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": entries})
+}

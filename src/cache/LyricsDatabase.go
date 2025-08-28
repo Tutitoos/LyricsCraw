@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -25,10 +27,10 @@ type LyricsDatabase struct {
 var LyricsDB *LyricsDatabase
 
 // cacheDoc is the BSON representation stored in MongoDB.
-type cacheDoc struct {
-	Key       string    `bson:"_id"`
-	Value     string    `bson:"value"`
-	ExpiresAt time.Time `bson:"expires_at"`
+type CacheDoc struct {
+	Ref   string `bson:"ref,omitempty"`
+	Key   string `bson:"_id"`
+	Value string `bson:"value"`
 }
 
 // InitLyricsDBFromEnv initializes LyricsDB using MONGODB_URI and APP_LYRICS_CACHE_TTL_SECONDS.
@@ -81,16 +83,7 @@ func (d *LyricsDatabase) Connect(uri, dbName, collName string) error {
 	}
 	coll := client.Database(dbName).Collection(collName)
 
-	// create TTL index on expires_at (expireAfterSeconds: 0)
-	idxModel := mongo.IndexModel{
-		Keys:    bson.D{{Key: "expires_at", Value: 1}},
-		Options: options.Index().SetExpireAfterSeconds(0),
-	}
-	if _, err := coll.Indexes().CreateOne(ctx, idxModel); err != nil {
-		// not fatal: continue but return error
-		_ = client.Disconnect(ctx)
-		return fmt.Errorf("failed to ensure TTL index: %w", err)
-	}
+	// no TTL index created; cache entries are managed externally or manually
 
 	d.client = client
 	d.collection = coll
@@ -107,20 +100,12 @@ func (d *LyricsDatabase) Get(key string) (string, bool) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	var doc cacheDoc
+	var doc CacheDoc
 	err := d.collection.FindOne(ctx, bson.M{"_id": key}).Decode(&doc)
 	if err != nil {
 		return "", false
 	}
-	if time.Now().After(doc.ExpiresAt) {
-		// expired: remove and treat as miss
-		go func(k string) {
-			ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel2()
-			d.collection.DeleteOne(ctx2, bson.M{"_id": k})
-		}(key)
-		return "", false
-	}
+
 	return doc.Value, true
 }
 
@@ -129,10 +114,21 @@ func (d *LyricsDatabase) Set(key, value string) error {
 	if d == nil || d.collection == nil {
 		return errors.New("db not initialized")
 	}
-	expires := time.Now().Add(d.ttl)
+
+	// generate a UUID ref for this entry and use SetWithRef to persist
+	ref := uuid.NewString()
+	return d.SetWithRef(key, value, ref)
+}
+
+// SetWithRef writes the value with an optional ref field.
+func (d *LyricsDatabase) SetWithRef(key, value, ref string) error {
+	if d == nil || d.collection == nil {
+		return errors.New("db not initialized")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	doc := cacheDoc{Key: key, Value: value, ExpiresAt: expires}
+	doc := CacheDoc{Key: key, Value: value, Ref: ref}
 	_, err := d.collection.UpdateOne(ctx, bson.M{"_id": key}, bson.M{"$set": doc}, options.Update().SetUpsert(true))
 	return err
 }
@@ -147,4 +143,33 @@ func (d *LyricsDatabase) Close() {
 	_ = d.client.Disconnect(ctx)
 	d.client = nil
 	d.collection = nil
+}
+
+// GetAll returns all non-expired cache entries as a slice of key/value pairs.
+func (d *LyricsDatabase) GetAll() ([]CacheDoc, error) {
+	if d == nil || d.collection == nil {
+		return nil, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cursor, err := d.collection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []CacheDoc
+	for cursor.Next(ctx) {
+		var doc CacheDoc
+		if err := cursor.Decode(&doc); err != nil {
+			// skip malformed document but continue
+			continue
+		}
+		results = append(results, doc)
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
