@@ -21,6 +21,24 @@ REST API in Go to fetch song lyrics by scraping Vagalume using Chrome (chromedp)
 - `APP_PORT`: server port. Default: `8080`.
 - `APP_LYRICS_CACHE_TTL_SECONDS`: cache TTL in seconds. Default: `1800` (30 min).
 - `APP_LYRICS_CACHE_MAX_ENTRIES`: maximum cache capacity. Default: `1000`.
+ - `MONGODB_URI`: MongoDB connection string used by the DB-backed cache. Example: `mongodb://localhost:27017` or an Atlas URI.
+ - `MONGODB_DB`: (optional) MongoDB database name for the cache. Default: `lyricscrawl`.
+ - `MONGODB_COLLECTION`: (optional) Collection used for cache documents. Default: `lyrics_cache`.
+
+Local testing with MongoDB (optional):
+
+1) Start a local Mongo instance with Docker:
+
+```bash
+docker run -d -p 27017:27017 --name mongo mongo:6
+export MONGODB_URI="mongodb://localhost:27017"
+```
+
+2) Start the app (dev):
+
+```bash
+make dev
+```
 
 You can define them in a `.env` at the repository root; if present, it is loaded on startup.
 

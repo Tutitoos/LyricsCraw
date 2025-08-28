@@ -2,30 +2,44 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
-// LyricsDatabase is a small Postgres-backed cache connector for Supabase.
+// LyricsDatabase is a small MongoDB-backed cache implementation.
 type LyricsDatabase struct {
-	connURL string
-	conn    *pgx.Conn
-	ttl     time.Duration
+	client     *mongo.Client
+	collection *mongo.Collection
+	ttl        time.Duration
 }
 
 // LyricsDB is the global DB-backed cache instance (nil until initialized).
 var LyricsDB *LyricsDatabase
 
-// InitLyricsDBFromEnv initializes LyricsDB using DATABASE_URL and APP_LYRICS_CACHE_TTL_SECONDS.
-// It returns an error if connection/table creation fails.
+// cacheDoc is the BSON representation stored in MongoDB.
+type cacheDoc struct {
+	Key       string    `bson:"_id"`
+	Value     string    `bson:"value"`
+	ExpiresAt time.Time `bson:"expires_at"`
+}
+
+// InitLyricsDBFromEnv initializes LyricsDB using MONGODB_URI and APP_LYRICS_CACHE_TTL_SECONDS.
+// Environment variables:
+// - MONGODB_URI (required)
+// - MONGODB_DB (optional, default: "lyricscrawl")
+// - MONGODB_COLLECTION (optional, default: "lyrics_cache")
 func InitLyricsDBFromEnv() error {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		return fmt.Errorf("DATABASE_URL not set")
+	uri := os.Getenv("MONGODB_URI")
+	if uri == "" {
+		return fmt.Errorf("MONGODB_URI not set")
 	}
 	ttl := 1800 * time.Second
 	if v := os.Getenv("APP_LYRICS_CACHE_TTL_SECONDS"); v != "" {
@@ -34,88 +48,103 @@ func InitLyricsDBFromEnv() error {
 		}
 	}
 
-	db := &LyricsDatabase{connURL: dbURL, ttl: ttl}
-	if err := db.Connect(); err != nil {
+	dbName := os.Getenv("MONGODB_DB")
+	if dbName == "" {
+		dbName = "lyricscrawl"
+	}
+	collName := os.Getenv("MONGODB_COLLECTION")
+	if collName == "" {
+		collName = "lyrics_cache"
+	}
+
+	d := &LyricsDatabase{ttl: ttl}
+	if err := d.Connect(uri, dbName, collName); err != nil {
 		return err
 	}
-	if err := db.EnsureTable(); err != nil {
-		db.Close()
-		return err
-	}
-	LyricsDB = db
+	LyricsDB = d
 	return nil
 }
 
-// Connect opens the pgx connection.
-func (d *LyricsDatabase) Connect() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// Connect establishes a MongoDB client, ensures the TTL index exists on expires_at.
+func (d *LyricsDatabase) Connect(uri, dbName, collName string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn, err := pgx.Connect(ctx, d.connURL)
+	clientOpts := options.Client().ApplyURI(uri)
+	client, err := mongo.Connect(ctx, clientOpts)
 	if err != nil {
 		return err
 	}
-	d.conn = conn
-	return nil
-}
-
-// EnsureTable creates the cache table if it does not exist.
-func (d *LyricsDatabase) EnsureTable() error {
-	if d.conn == nil {
-		return fmt.Errorf("not connected")
+	// verify connection
+	if err := client.Ping(ctx, readpref.Primary()); err != nil {
+		_ = client.Disconnect(ctx)
+		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	q := `CREATE TABLE IF NOT EXISTS lyrics_cache (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        expires_at TIMESTAMPTZ NOT NULL
-    )`
-	_, err := d.conn.Exec(ctx, q)
-	return err
+	coll := client.Database(dbName).Collection(collName)
+
+	// create TTL index on expires_at (expireAfterSeconds: 0)
+	idxModel := mongo.IndexModel{
+		Keys:    bson.D{{Key: "expires_at", Value: 1}},
+		Options: options.Index().SetExpireAfterSeconds(0),
+	}
+	if _, err := coll.Indexes().CreateOne(ctx, idxModel); err != nil {
+		// not fatal: continue but return error
+		_ = client.Disconnect(ctx)
+		return fmt.Errorf("failed to ensure TTL index: %w", err)
+	}
+
+	d.client = client
+	d.collection = coll
+
+	fmt.Printf("✅ Connected to MongoDB, using DB: %s, Collection: %s, TTL: %v\n", dbName, collName, d.ttl)
+
+	return nil
 }
 
 // Get returns the cached value if present and not expired.
 func (d *LyricsDatabase) Get(key string) (string, bool) {
-	if d == nil || d.conn == nil {
+	if d == nil || d.collection == nil {
 		return "", false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	var value string
-	var expires time.Time
-	row := d.conn.QueryRow(ctx, "SELECT value, expires_at FROM lyrics_cache WHERE key=$1", key)
-	if err := row.Scan(&value, &expires); err != nil {
+	var doc cacheDoc
+	err := d.collection.FindOne(ctx, bson.M{"_id": key}).Decode(&doc)
+	if err != nil {
 		return "", false
 	}
-	if time.Now().After(expires) {
-		// lazy delete
+	if time.Now().After(doc.ExpiresAt) {
+		// expired: remove and treat as miss
 		go func(k string) {
 			ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel2()
-			d.conn.Exec(ctx2, "DELETE FROM lyrics_cache WHERE key=$1", k)
+			d.collection.DeleteOne(ctx2, bson.M{"_id": k})
 		}(key)
 		return "", false
 	}
-	return value, true
+	return doc.Value, true
 }
 
 // Set writes the value with TTL (upsert).
 func (d *LyricsDatabase) Set(key, value string) error {
-	if d == nil || d.conn == nil {
-		return fmt.Errorf("db not initialized")
+	if d == nil || d.collection == nil {
+		return errors.New("db not initialized")
 	}
 	expires := time.Now().Add(d.ttl)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	_, err := d.conn.Exec(ctx, "INSERT INTO lyrics_cache (key, value, expires_at) VALUES ($1,$2,$3) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, expires_at=EXCLUDED.expires_at", key, value, expires)
+	doc := cacheDoc{Key: key, Value: value, ExpiresAt: expires}
+	_, err := d.collection.UpdateOne(ctx, bson.M{"_id": key}, bson.M{"$set": doc}, options.Update().SetUpsert(true))
 	return err
 }
 
-// Close closes the DB connection.
+// Close closes the MongoDB client connection.
 func (d *LyricsDatabase) Close() {
-	if d == nil || d.conn == nil {
+	if d == nil || d.client == nil {
 		return
 	}
-	d.conn.Close(context.Background())
-	d.conn = nil
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = d.client.Disconnect(ctx)
+	d.client = nil
+	d.collection = nil
 }
